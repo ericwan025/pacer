@@ -7,3 +7,6 @@ data/
 .pytest_cache/
 artifacts/
 README_assets/
+
+# keep the committed ONNX parity fixture despite the *.onnx rule above
+!go/internal/model/testdata/model.onnx
