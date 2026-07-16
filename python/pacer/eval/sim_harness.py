@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from pacer.eval.baselines import STRATEGIES, PacingRunner, Strategy
+from pacer.eval.budget_sizing import achievable_spend, size_budgets
 from pacer.eval.delivery_metrics import delivery_report
 from pacer.eval.pacing_metrics import pacing_report
 from pacer.sim.burst import BurstConfig, inject_bursts
@@ -112,7 +113,7 @@ def _feature_values(features):
 
 def run_one(
     strategy: Strategy,
-    hours,
+    replay,
     features,
     labels,
     pctrs,
@@ -120,15 +121,15 @@ def run_one(
     gains: PIDConfig,
     n_campaigns: int,
     bursty: bool,
+    budgets: dict[int, float],
     seed: int,
 ):
-    replay = TrafficReplay(hours, seed=seed)
-    if bursty:
-        replay = inject_bursts(replay, BurstConfig(seed=seed))
     duration = replay.duration_seconds()
     curve = TrafficAwareTarget(counts) if strategy.traffic_aware else UniformTarget(duration)
 
     camps = generate_campaigns(n_campaigns, _feature_values(features), seed=seed)
+    for c in camps:  # apply the inventory-sized budgets
+        c.daily_budget = budgets[c.id]
     runner = PacingRunner(strategy, camps, curve, gains, seed=seed)
     eng = Engine(
         camps, features, labels, pctrs,
@@ -180,9 +181,19 @@ def main() -> None:
     rows = []
     detail = {}
     for bursty in (False, True):
+        replay = TrafficReplay(hours, seed=args.seed)
+        if bursty:
+            replay = inject_bursts(replay, BurstConfig(seed=args.seed))
+        # calibrate budgets to inventory ONCE per traffic mode, reused by all
+        # strategies so the comparison is at identical budgets.
+        base = generate_campaigns(args.campaigns, _feature_values(features), seed=args.seed)
+        ach = achievable_spend(base, features, labels, pctrs, replay)
+        size_budgets(base, ach, target_utilization=0.6)
+        budgets = {c.id: c.daily_budget for c in base}
+
         for strat in STRATEGIES:
-            row, det = run_one(strat, hours, features, labels, pctrs, counts,
-                               gains, args.campaigns, bursty, args.seed)
+            row, det = run_one(strat, replay, features, labels, pctrs, counts,
+                               gains, args.campaigns, bursty, budgets, args.seed)
             rows.append(row)
             detail[(strat.name, bursty)] = det
 

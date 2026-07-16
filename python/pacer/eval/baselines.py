@@ -73,8 +73,13 @@ class PacingRunner:
         if not self.strategy.pid:
             return
         for c in campaigns:
-            target = self.curve.spend_target(c.daily_budget, t)
-            c.pacing_multiplier = self.pids[c.id].update(setpoint=target, measurement=c.spend)
+            # Operate on BUDGET-NORMALIZED pacing error so the same gains apply to
+            # a $10/day and a $10,000/day campaign — essential when budgets are
+            # log-normal across orders of magnitude. setpoint = fraction of budget
+            # that should be spent by now; measurement = fraction actually spent.
+            setpoint = self.curve.fraction(t)
+            measurement = c.spend / c.daily_budget if c.daily_budget > 0 else 0.0
+            c.pacing_multiplier = self.pids[c.id].update(setpoint, measurement)
 
     def throttle_hook(self, c: Campaign, pctr: float) -> bool:
         m = self.strategy.mode

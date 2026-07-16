@@ -62,6 +62,35 @@ def test_all_strategies_run_and_respect_budget():
             assert c.spend <= c.daily_budget + 1e-9
 
 
+def test_pid_tracks_target_uncontested():
+    """The strongest controller-correctness check in the full engine: a single
+    campaign with no competition must track the traffic-aware target almost
+    exactly. Multi-campaign deviation is a competitive-market effect, not a bug."""
+    from pacer.eval.budget_sizing import achievable_spend, size_budgets
+    from pacer.sim.traffic import TrafficReplay
+
+    hours, features, labels, pctrs, counts = _data(seed=0)
+    replay = TrafficReplay(hours, seed=0)
+    curve = TrafficAwareTarget(counts)
+    c = Campaign(0, 1e9, 0.5, Targeting("banner_pos", frozenset({"0"})))
+    ach = achievable_spend([c], features, labels, pctrs, replay)
+    size_budgets([c], ach, target_utilization=0.6)
+
+    strat = next(s for s in STRATEGIES if s.name == "traffic_pid_bidshade")
+    gains = PIDConfig(kp=4.0, ki=0.4, kd=0.0, dt=10.0)
+    runner = PacingRunner(strat, [c], curve, gains, seed=0)
+    eng = Engine(
+        [c], features, labels, pctrs, EngineConfig(reserve=0.001, control_interval_s=10.0),
+        control_hook=runner.control_hook,
+        throttle_hook=runner.throttle_hook,
+        bid_hook=runner.bid_hook,
+    )
+    stats = eng.run(replay)
+    rep = pacing_report(stats.spend_trace, [c], curve)
+    assert rep.mean_abs_pacing_error_pct < 0.02   # under 2% — tracks tightly
+    assert rep.early_exhaustion_frac == 0.0
+
+
 def test_traffic_pid_paces_better_than_greedy():
     greedy = next(s for s in STRATEGIES if s.name == "greedy")
     tpid = next(s for s in STRATEGIES if s.name == "traffic_pid_bidshade")

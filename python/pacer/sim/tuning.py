@@ -74,7 +74,9 @@ def simulate_pacing(
         )
 
         target = target_curve.spend_target(budget, t)
-        mult = pid.update(setpoint=target, measurement=spend)
+        # feed BUDGET-NORMALIZED error so tuned gains transfer to the full engine,
+        # which normalizes the same way (see eval/baselines.py control_hook).
+        mult = pid.update(setpoint=target_curve.fraction(t), measurement=spend / budget)
         participation = min(1.0, max(0.0, mult))
         delivered = min(achievable * participation, max(0.0, budget - spend))
         spend += delivered
