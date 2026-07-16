@@ -45,6 +45,11 @@ class RunStats:
     total_clicks: int = 0
     # per-campaign spend trace sampled at each control tick: cid -> [(t, spend)]
     spend_trace: dict = field(default_factory=dict)
+    # per-campaign pacing-multiplier trace: cid -> [(t, multiplier)]
+    mult_trace: dict = field(default_factory=dict)
+    # winning impressions / clicks bucketed by hour-of-day (0..23)
+    wins_by_daypart: np.ndarray = field(default_factory=lambda: np.zeros(24, dtype=np.int64))
+    clicks_by_daypart: np.ndarray = field(default_factory=lambda: np.zeros(24, dtype=np.int64))
 
 
 class Engine:
@@ -75,6 +80,7 @@ class Engine:
     def run(self, replay) -> RunStats:
         stats = RunStats()
         stats.spend_trace = {c.id: [] for c in self.campaigns}
+        stats.mult_trace = {c.id: [] for c in self.campaigns}
         next_control = 0.0
 
         for pidx, t in replay.stream():
@@ -84,6 +90,7 @@ class Engine:
                     self.control_hook(next_control, self.campaigns)
                 for c in self.campaigns:
                     stats.spend_trace[c.id].append((next_control, c.spend))
+                    stats.mult_trace[c.id].append((next_control, c.pacing_multiplier))
                 next_control += self.cfg.control_interval_s
 
             feats = self.features[pidx]
@@ -110,7 +117,10 @@ class Engine:
             winner.charge(cost)
             stats.total_spend += cost
             stats.auctions_with_winner += 1
+            daypart = int((t // 3600) % 24)
+            stats.wins_by_daypart[daypart] += 1
             if label == 1:
                 stats.total_clicks += 1
+                stats.clicks_by_daypart[daypart] += 1
 
         return stats
