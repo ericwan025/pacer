@@ -8,5 +8,5 @@ data/
 artifacts/
 README_assets/
 
-# keep the committed ONNX parity fixture despite the *.onnx rule above
-!go/internal/model/testdata/model.onnx
+# keep the committed ONNX parity/integration fixtures despite the *.onnx rule above
+!go/internal/model/testdata/*.onnx

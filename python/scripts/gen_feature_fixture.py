@@ -79,6 +79,19 @@ def main() -> None:
     (OUT / "rows.json").write_text(json.dumps(raw_rows))
     (OUT / "expected.json").write_text(json.dumps(expected))
     (OUT / "field_order.json").write_text(json.dumps(field_order))
+
+    # also export a DeepFM whose cardinalities MATCH this transform, so the Go
+    # end-to-end integration test can go raw row -> transform -> model.
+    import torch
+
+    from pacer.models.deepfm import DeepFM
+    from pacer.models.export import export_onnx
+
+    torch.manual_seed(0)
+    cards = [t.cardinalities()[f] for f in field_order]
+    dfm = DeepFM(cards, embed_dim=8, mlp_dims=(32, 32), dropout=0.1).eval()
+    export_onnx(dfm, n_fields=len(cards), path=str(OUT / "integration_model.onnx"))
+
     print(f"wrote fixture to {OUT}/ ({len(sample)} rows, {len(field_order)} fields)")
 
 
