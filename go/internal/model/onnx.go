@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 
 	ort "github.com/yalue/onnxruntime_go"
@@ -28,29 +29,51 @@ func initEnv() error {
 	return initErr
 }
 
-// Model wraps an ONNX session that maps int64 feature vectors to pCTR.
+// Model wraps a POOL of ONNX sessions mapping int64 feature vectors to pCTR.
+//
+// onnxruntime_go sessions are not safe for concurrent Run, so the hot path must
+// not share one across goroutines. We keep a pool (one session per worker slot)
+// handed out through a buffered channel; each Predict borrows a session, runs,
+// and returns it. This is both correct under concurrency and lets inference run
+// in parallel instead of serializing on a single session.
 type Model struct {
-	session  *ort.DynamicAdvancedSession
-	nFields  int
-	inName   string
-	outName  string
+	pool    chan *ort.DynamicAdvancedSession
+	all     []*ort.DynamicAdvancedSession
+	nFields int
 }
 
-// LoadModel opens the exported ONNX model. inputName/outputName default to the
-// names used by export.py ("features"/"pctr").
+// LoadModel opens the exported ONNX model with a session pool. poolSize<=0 uses
+// GOMAXPROCS. Input/output names are the ones export.py uses ("features"/"pctr").
 func LoadModel(path string, nFields int) (*Model, error) {
+	return LoadModelPool(path, nFields, 0)
+}
+
+func LoadModelPool(path string, nFields, poolSize int) (*Model, error) {
 	if err := initEnv(); err != nil {
 		return nil, fmt.Errorf("onnxruntime init: %w", err)
 	}
-	in, out := "features", "pctr"
-	s, err := ort.NewDynamicAdvancedSession(path, []string{in}, []string{out}, nil)
-	if err != nil {
-		return nil, err
+	if poolSize <= 0 {
+		poolSize = runtime.GOMAXPROCS(0)
 	}
-	return &Model{session: s, nFields: nFields, inName: in, outName: out}, nil
+	m := &Model{pool: make(chan *ort.DynamicAdvancedSession, poolSize), nFields: nFields}
+	for i := 0; i < poolSize; i++ {
+		s, err := ort.NewDynamicAdvancedSession(path, []string{"features"}, []string{"pctr"}, nil)
+		if err != nil {
+			m.Close()
+			return nil, err
+		}
+		m.all = append(m.all, s)
+		m.pool <- s
+	}
+	return m, nil
 }
 
-func (m *Model) Close() error { return m.session.Destroy() }
+func (m *Model) Close() error {
+	for _, s := range m.all {
+		_ = s.Destroy()
+	}
+	return nil
+}
 
 // Predict runs a batch. features is [batch][nFields] int64; returns pCTR[batch].
 func (m *Model) Predict(features [][]int64) ([]float32, error) {
@@ -72,8 +95,10 @@ func (m *Model) Predict(features [][]int64) ([]float32, error) {
 	}
 	defer inTensor.Destroy()
 
+	sess := <-m.pool           // borrow a session
+	defer func() { m.pool <- sess }() // return it
 	outputs := []ort.Value{nil}
-	if err := m.session.Run([]ort.Value{inTensor}, outputs); err != nil {
+	if err := sess.Run([]ort.Value{inTensor}, outputs); err != nil {
 		return nil, err
 	}
 	defer outputs[0].Destroy()

@@ -79,17 +79,18 @@ func NewHandler(t Transformer, s Scorer, c MultiplierCache, ch Charger,
 
 // Decide runs the bid logic for one request (no HTTP). Returns the response.
 func (h *Handler) Decide(ctx context.Context, req *Request) (*Response, error) {
-	feats, err := h.transform.Apply(req.Features)
-	if err != nil {
-		return nil, err
-	}
-
-	// pCTR depends only on the impression, so it is at most ONE inference per
-	// request, computed lazily so the throttle-everyone case pays nothing.
+	// Feature transform AND inference are computed lazily: if every candidate is
+	// throttled out, the request never pays for either. This is the filter-only
+	// fast path. pCTR depends only on the impression, so inference is at most once
+	// per request.
 	var pctr float64
 	haveP := false
 	score := func() (float64, error) {
 		if !haveP {
+			feats, err := h.transform.Apply(req.Features)
+			if err != nil {
+				return 0, err
+			}
 			out, err := h.scorer.Predict([][]int64{feats})
 			if err != nil {
 				return 0, err
