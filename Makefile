@@ -34,6 +34,14 @@ test:
 go-test:
 	cd go && go test -race ./...
 
+# Phase 8: benchmark filter-only vs full path (needs redis + integration fixtures).
+bench:
+	cd go && bash bench/run_bench.sh
+
+# Capture a CPU profile of the full path and print where time goes.
+profile:
+	cd go && bash bench/profile.sh
+
 redis-up:
 	docker compose up -d redis
 

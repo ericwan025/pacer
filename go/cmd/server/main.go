@@ -13,6 +13,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -31,6 +32,7 @@ func main() {
 	reserve := flag.Float64("reserve", 0.01, "auction reserve price")
 	modeStr := flag.String("mode", "bidshade", "pacing mode: bidshade|throttle")
 	refresh := flag.Duration("refresh", 5*time.Second, "multiplier cache refresh interval")
+	enablePprof := flag.Bool("pprof", false, "expose /debug/pprof for CPU profiling")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -73,6 +75,14 @@ func main() {
 	mux.Handle("/bid", handler)
 	mux.HandleFunc("/healthz", bid.HealthzHandler)
 	mux.HandleFunc("/metrics", metrics.MetricsHandler)
+	if *enablePprof {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		log.Printf("pprof enabled at /debug/pprof/")
+	}
 
 	log.Printf("pacer server listening on %s (mode=%s, fields=%d, refresh=%s)",
 		*addr, *modeStr, nFields, *refresh)
