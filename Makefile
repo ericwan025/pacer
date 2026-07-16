@@ -1,7 +1,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: venv data features test sim bench redis-up redis-down clean
+.PHONY: venv data features train test sim bench redis-up redis-down clean
 
 venv:
 	python3 -m venv .venv
@@ -15,6 +15,10 @@ data:
 # Fit the feature transform on train, write artifact + Phase 1 report/plots.
 features:
 	cd python && ../$(PY) -m pacer.data.report
+
+# Phase 2: train LR + DeepFM, calibrate, export ONNX + calibrator + transform.
+train:
+	cd python && ../$(PY) -m pacer.models.train_ctr
 
 test:
 	cd python && ../$(PY) -m pytest -q
