@@ -89,6 +89,11 @@ def main() -> None:
 
     export_calibrator(calibrator, str(ARTIFACT_DIR / "calibrator.json"))
 
+    # reliability diagram (Phase 2 deliverable)
+    from pacer.eval.plots import plot_reliability
+
+    plot_reliability(yte, p_test, "../README_assets/reliability.png", p_post=p_test_cal)
+
     # 2d. Export DeepFM to ONNX
     export_onnx(dfm, n_fields=len(cards), path=str(ARTIFACT_DIR / "model.onnx"))
     print(f"\nexported artifacts to {ARTIFACT_DIR}/")
