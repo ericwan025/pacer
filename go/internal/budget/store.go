@@ -11,6 +11,7 @@ package budget
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -36,13 +37,50 @@ func New(rdb *redis.Client) *Store { return &Store{rdb: rdb} }
 
 func key(campaignID int64) string { return fmt.Sprintf("campaign:%d", campaignID) }
 
-// SetCampaign initializes budget + multiplier and resets spend to 0.
+const registryKey = "campaigns" // set of known campaign ids
+
+// SetCampaign initializes budget + multiplier and resets spend to 0, and records
+// the id in the campaign registry so the multiplier table can be bulk-loaded.
 func (s *Store) SetCampaign(ctx context.Context, id int64, budget, multiplier float64) error {
-	return s.rdb.HSet(ctx, key(id), map[string]any{
+	pipe := s.rdb.TxPipeline()
+	pipe.HSet(ctx, key(id), map[string]any{
 		"budget":     budget,
 		"multiplier": multiplier,
 		"spend":      0.0,
-	}).Err()
+	})
+	pipe.SAdd(ctx, registryKey, id)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// AllMultipliers bulk-loads the multiplier for every registered campaign. Used by
+// the in-process pacing cache's background refresh.
+func (s *Store) AllMultipliers(ctx context.Context) (map[int64]float64, error) {
+	ids, err := s.rdb.SMembers(ctx, registryKey).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]float64, len(ids))
+	pipe := s.rdb.Pipeline()
+	cmds := make(map[int64]*redis.StringCmd, len(ids))
+	parsed := make([]int64, 0, len(ids))
+	for _, s := range ids {
+		id, perr := strconv.ParseInt(s, 10, 64)
+		if perr != nil {
+			continue
+		}
+		parsed = append(parsed, id)
+		cmds[id] = pipe.HGet(ctx, key(id), "multiplier")
+	}
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return nil, err
+	}
+	for _, id := range parsed {
+		if v, err := cmds[id].Float64(); err == nil {
+			out[id] = v
+		}
+	}
+	return out, nil
 }
 
 // Charge attempts to spend cost. Returns true iff the charge fit within budget.
