@@ -31,3 +31,16 @@ func (t *Throttle) Participate(p float64) bool {
 	}
 	return t.rng.Float64() < p
 }
+
+// Participate is a goroutine-safe participation draw for the server hot path,
+// using math/rand/v2's global source (safe for concurrent use). Non-deterministic
+// by design — for reproducible draws use a per-worker *Throttle instead.
+func Participate(p float64) bool {
+	if p <= 0 {
+		return false
+	}
+	if p >= 1 {
+		return true
+	}
+	return rand.Float64() < p
+}
