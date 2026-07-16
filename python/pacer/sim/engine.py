@@ -26,6 +26,9 @@ from pacer.sim.campaign import Campaign
 ControlHook = Callable[[float, list[Campaign]], None]
 # A throttle hook decides participation: (campaign, pctr) -> bool.
 ThrottleHook = Callable[[Campaign, float], bool]
+# A bid hook computes the bid: (campaign, pctr) -> bid_amount. Lets pacing modes
+# decide whether the multiplier shades the bid or gates participation.
+BidHook = Callable[[Campaign, float], float]
 
 
 @dataclass
@@ -54,6 +57,7 @@ class Engine:
         cfg: EngineConfig,
         control_hook: Optional[ControlHook] = None,
         throttle_hook: Optional[ThrottleHook] = None,
+        bid_hook: Optional[BidHook] = None,
     ):
         self.campaigns = campaigns
         self.by_id = {c.id: c for c in campaigns}
@@ -63,6 +67,10 @@ class Engine:
         self.cfg = cfg
         self.control_hook = control_hook
         self.throttle_hook = throttle_hook
+        # default: fold the multiplier into the bid (bid-shading behavior)
+        self.bid_hook = bid_hook or (
+            lambda c, pctr: compute_bid(pctr, c.value_per_click, c.pacing_multiplier)
+        )
 
     def run(self, replay) -> RunStats:
         stats = RunStats()
@@ -89,7 +97,7 @@ class Engine:
                     continue
                 if self.throttle_hook is not None and not self.throttle_hook(c, pctr):
                     continue
-                bid = compute_bid(pctr, c.value_per_click, c.pacing_multiplier)
+                bid = self.bid_hook(c, pctr)
                 if bid > 0:
                     bids.append((c.id, bid))
 
