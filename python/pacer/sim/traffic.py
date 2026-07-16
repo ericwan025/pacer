@@ -55,15 +55,19 @@ class TrafficReplay:
         self.hours = np.asarray(hours)
         self.timestamps = synthesize_timestamps(self.hours, seed)
         self.order = np.argsort(self.timestamps, kind="mergesort")
+        # payload_idx[i] is which original impression row position i refers to.
+        # Identity here; burst injection remaps it so duplicated rows still point
+        # at real payloads.
+        self.payload_idx = np.arange(len(self.hours), dtype=np.int64)
         self.seed = seed
 
     def __len__(self) -> int:
         return len(self.hours)
 
     def stream(self):
-        """Yield (impression_index, timestamp_seconds) in time order."""
+        """Yield (payload_index, timestamp_seconds) in time order."""
         for i in self.order:
-            yield int(i), float(self.timestamps[i])
+            yield int(self.payload_idx[i]), float(self.timestamps[i])
 
     def duration_seconds(self) -> float:
         return float(self.timestamps.max()) if len(self.timestamps) else 0.0
