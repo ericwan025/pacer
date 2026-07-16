@@ -31,6 +31,9 @@ sim-demo:
 test:
 	cd python && ../$(PY) -m pytest -q
 
+go-test:
+	cd go && go test -race ./...
+
 redis-up:
 	docker compose up -d redis
 
