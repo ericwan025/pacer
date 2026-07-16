@@ -1,0 +1,36 @@
+[project]
+name = "pacer"
+version = "0.1.0"
+description = "Calibrated CTR bidder with PID budget pacing"
+requires-python = ">=3.11"
+dependencies = [
+    "polars>=1.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch>=2.2",
+    "onnx>=1.15",
+    "onnxruntime>=1.17",
+    "scikit-learn>=1.4",
+    "matplotlib>=3.8",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pacer*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
