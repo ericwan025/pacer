@@ -20,6 +20,14 @@ features:
 train:
 	cd python && ../$(PY) -m pacer.models.train_ctr
 
+# Phase 6: run all strategies x {smooth,bursty}, print tables, write plots.
+# Add --synthetic for a demo run without Kaggle data (numbers not for README).
+sim:
+	cd python && ../$(PY) -m pacer.eval.sim_harness
+
+sim-demo:
+	cd python && ../$(PY) -m pacer.eval.sim_harness --synthetic --campaigns 200
+
 test:
 	cd python && ../$(PY) -m pytest -q
 
