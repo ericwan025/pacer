@@ -96,7 +96,7 @@ def build_real():
 
     hours = test["hour"].to_numpy()
     features = test.select(["banner_pos", "site_category"]).to_dicts()
-    return hours, np.asarray(labels), np.asarray(pctrs)
+    return hours, features, np.asarray(labels), np.asarray(pctrs)
 
 
 # ---------------------------------------------------------------------------

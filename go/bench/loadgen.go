@@ -45,7 +45,7 @@ func main() {
 	flag.Parse()
 
 	body, _ := json.Marshal(request{
-		Features: sampleFeatures(),
+		Features:   sampleFeatures(),
 		Candidates: []candidate{{ID: *campaignID, Value: 10.0}},
 	})
 
@@ -83,8 +83,8 @@ func main() {
 					continue
 				}
 				// fully drain before close so the keep-alive connection is reused
-				io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
 				d := time.Since(t0)
 				if measuring.Load() {
 					local = append(local, d)

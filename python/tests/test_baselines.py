@@ -13,7 +13,6 @@ from pacer.sim.target import TrafficAwareTarget, UniformTarget
 
 def _data(n=6000, hours_n=24, seed=0):
     rng = np.random.default_rng(seed)
-    per = n // hours_n
     # diurnal volume: reuse a fixed profile scaled to per-hour counts
     profile = np.array(
         [2, 1, 1, 1, 2, 4, 7, 10, 12, 13, 13, 12, 11, 11, 12, 13, 14, 15, 16, 14, 11, 8, 5, 3],

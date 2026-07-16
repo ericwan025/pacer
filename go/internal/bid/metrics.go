@@ -3,6 +3,7 @@ package bid
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -47,20 +48,23 @@ func HealthzHandler(w http.ResponseWriter, _ *http.Request) {
 
 // MetricsHandler renders the counters in Prometheus text format.
 func (m *Metrics) MetricsHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	fmt.Fprintf(w, "pacer_bid_requests_total %d\n", m.Requests.Load())
-	fmt.Fprintf(w, "pacer_bid_wins_total %d\n", m.Wins.Load())
-	fmt.Fprintf(w, "pacer_bid_throttled_total %d\n", m.Throttled.Load())
+	var b strings.Builder
+	fmt.Fprintf(&b, "pacer_bid_requests_total %d\n", m.Requests.Load())
+	fmt.Fprintf(&b, "pacer_bid_wins_total %d\n", m.Wins.Load())
+	fmt.Fprintf(&b, "pacer_bid_throttled_total %d\n", m.Throttled.Load())
 
 	var cumulative int64
 	for i, edge := range m.buckets {
 		cumulative += m.counts[i].Load()
-		fmt.Fprintf(w, "pacer_bid_latency_us_bucket{le=\"%g\"} %d\n", edge, cumulative)
+		fmt.Fprintf(&b, "pacer_bid_latency_us_bucket{le=\"%g\"} %d\n", edge, cumulative)
 	}
 	cumulative += m.counts[len(m.buckets)].Load()
-	fmt.Fprintf(w, "pacer_bid_latency_us_bucket{le=\"+Inf\"} %d\n", cumulative)
+	fmt.Fprintf(&b, "pacer_bid_latency_us_bucket{le=\"+Inf\"} %d\n", cumulative)
 
 	if m.staleness != nil {
-		fmt.Fprintf(w, "pacer_cache_staleness_seconds %g\n", m.staleness().Seconds())
+		fmt.Fprintf(&b, "pacer_cache_staleness_seconds %g\n", m.staleness().Seconds())
 	}
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	_, _ = w.Write([]byte(b.String()))
 }

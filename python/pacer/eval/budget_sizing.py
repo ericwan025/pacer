@@ -15,7 +15,6 @@ same budgets are used for every strategy.
 
 from __future__ import annotations
 
-import numpy as np
 
 from pacer.sim.campaign import Campaign
 from pacer.sim.engine import Engine, EngineConfig

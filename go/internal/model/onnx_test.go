@@ -22,7 +22,7 @@ func TestONNXParityWithPython(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot load ONNX model (is onnxruntime installed? set ONNXRUNTIME_LIB_PATH): %v", err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 
 	got, err := m.Predict(inputs)
 	if err != nil {

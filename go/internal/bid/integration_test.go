@@ -44,7 +44,7 @@ func TestEndToEndBidChargesRedis(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot load ONNX model: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	// a fresh campaign with a generous budget and full multiplier
 	const cid = 4242
@@ -76,7 +76,7 @@ func TestEndToEndBidChargesRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out bid.Response
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatal(err)

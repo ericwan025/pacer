@@ -59,7 +59,7 @@ func LoadModelPool(path string, nFields, poolSize int) (*Model, error) {
 	for i := 0; i < poolSize; i++ {
 		s, err := ort.NewDynamicAdvancedSession(path, []string{"features"}, []string{"pctr"}, nil)
 		if err != nil {
-			m.Close()
+			_ = m.Close()
 			return nil, err
 		}
 		m.all = append(m.all, s)
@@ -93,15 +93,15 @@ func (m *Model) Predict(features [][]int64) ([]float32, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer inTensor.Destroy()
+	defer func() { _ = inTensor.Destroy() }()
 
-	sess := <-m.pool           // borrow a session
+	sess := <-m.pool                  // borrow a session
 	defer func() { m.pool <- sess }() // return it
 	outputs := []ort.Value{nil}
 	if err := sess.Run([]ort.Value{inTensor}, outputs); err != nil {
 		return nil, err
 	}
-	defer outputs[0].Destroy()
+	defer func() { _ = outputs[0].Destroy() }()
 
 	out, ok := outputs[0].(*ort.Tensor[float32])
 	if !ok {

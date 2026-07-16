@@ -12,7 +12,6 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 
 from pacer.data.download import SPLIT_DIR

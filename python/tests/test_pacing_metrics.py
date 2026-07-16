@@ -44,7 +44,6 @@ def test_pacing_error_scales_with_offset():
 
 
 def test_early_exhaustion_detection():
-    curve = UniformTarget(HORIZON)
     camps = [_campaign(0, 100.0), _campaign(1, 100.0)]
     # camp 0 blows budget at hour 5; camp 1 paces to hour 23
     trace = {

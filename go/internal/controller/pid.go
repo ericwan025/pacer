@@ -62,7 +62,7 @@ func (p *PID) Update(setpoint, measurement float64) float64 {
 	satHigh := mappedProv > c.MaxMult
 	satLow := mappedProv < c.MinMult
 	pushingOut := (satHigh && error > 0) || (satLow && error < 0)
-	if !(c.AntiWindup && pushingOut) {
+	if !c.AntiWindup || !pushingOut {
 		p.integral += inc
 	}
 

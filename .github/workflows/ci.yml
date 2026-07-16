@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,train]"
+      - name: ruff
+        run: ruff check .
+      - name: pytest (includes ONNX export + parity)
+        run: pytest -q
+      - name: regenerate Go parity fixtures (build ONNX export)
+        run: |
+          python -m scripts.gen_feature_fixture
+          python -m scripts.gen_model_fixture
+          python -m scripts.gen_pid_fixture
+
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 5
+    env:
+      REDIS_ADDR: localhost:6379
+      ONNXRUNTIME_LIB_PATH: ${{ github.workspace }}/onnxruntime/lib/libonnxruntime.so
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: install onnxruntime C library
+        run: |
+          ver=1.17.3
+          curl -sSL -o ort.tgz \
+            https://github.com/microsoft/onnxruntime/releases/download/v${ver}/onnxruntime-linux-x64-${ver}.tgz
+          mkdir -p "${{ github.workspace }}/onnxruntime"
+          tar -xzf ort.tgz --strip-components=1 -C "${{ github.workspace }}/onnxruntime"
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: go
+          version: latest
+      - name: go test (race)
+        run: go test -race ./...
